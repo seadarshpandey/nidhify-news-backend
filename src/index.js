@@ -73,7 +73,7 @@ connectDB().then(async () => {
   );
 
   cron.schedule(
-    "0 8,13,19 * * *",
+    "0 8,19 * * *",
     () => {
       console.log("Scheduled notification sending...");
       sendNewsNotification().catch((err) =>
