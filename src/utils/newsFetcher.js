@@ -5,116 +5,145 @@ const NEWS_FEEDS = [
   { name: 'ET Mutual Funds', url: 'https://economictimes.indiatimes.com/mf/rss.cms', category: 'Mutual Funds' },
   { name: 'Moneycontrol Markets', url: 'https://www.moneycontrol.com/rss/marketreports.xml', category: 'Markets' },
   { name: 'LiveMint Money', url: 'https://www.livemint.com/rss/money', category: 'Personal Finance' },
-  { name: 'ET Now Business', url: 'https://www.etnownews.com/feeds/gns-etn-markets.xml', category: 'Business' }
+  { name: 'ET Now Business', url: 'https://www.etnownews.com/feeds/gns-etn-markets.xml', category: 'Business' },
+  { name: 'Business Standard Finance', url: 'https://www.business-standard.com/rss/finance-103.rss', category: 'Finance' },
+  { name: 'Business Standard Personal Finance', url: 'https://www.business-standard.com/rss/finance/personal-finance-10313.rss', category: 'Personal Finance' },
+  { name: 'Business Standard Finance News', url: 'https://www.business-standard.com/rss/finance/news-10301.rss', category: 'Finance' }
 ];
 
-const CACHE_DURATION = 3 * 60 * 60 * 1000;
-const MAX_PER_FEED = 2;
-const MAX_CACHE_SIZE = 15;
+const MAX_PER_FEED = 5;
+const BATCH_SIZE = 3;
 
-let newsCache = { data: [], fetchedAt: null };
+let isSyncRunning = false;
 
-const fetchAllNews = async () => {
-  if (newsCache.fetchedAt && (Date.now() - newsCache.fetchedAt) < CACHE_DURATION) {
-    return newsCache.data;
+function computeArticleId(url) {
+  return Buffer.from(url).toString('base64').slice(0, 16);
+}
+
+function extractDescription(item) {
+  const raw = item.contentSnippet || item.content || item.summary || '';
+  return raw.trim().slice(0, 200);
+}
+
+function getDedupKey(item) {
+  const normalizedTitle = item.title.toLowerCase().trim();
+  const dateStr = item.publishedAt
+    ? new Date(item.publishedAt).toISOString().split('T')[0]
+    : '';
+  return `${normalizedTitle}_${dateStr}`;
+}
+
+async function fetchAndStoreNews() {
+  if (isSyncRunning) {
+    console.log('RSS sync skipped because previous sync is still running.');
+    return null;
   }
 
-  const parser = new Parser({
-    timeout: 8000,
-    headers: { 'User-Agent': 'Mozilla/5.0' }
-  });
-
-  const allItems = [];
-
-  for (let i = 0; i < NEWS_FEEDS.length; i += 2) {
-    const batch = NEWS_FEEDS.slice(i, i + 2);
-    const results = await Promise.allSettled(
-      batch.map(feed => parser.parseURL(feed.url))
-    );
-
-    for (let j = 0; j < results.length; j++) {
-      const feedIndex = i + j;
-      if (results[j].status === 'rejected') continue;
-
-      for (const item of (results[j].value.items || []).slice(0, MAX_PER_FEED)) {
-        const title = (item.title || '').trim();
-        const url = item.link || '';
-        if (!title || !url) continue;
-
-        allItems.push({
-          id: Buffer.from(url).toString('base64').slice(0, 16),
-          title,
-          description: (item.contentSnippet || '').slice(0, 200),
-          url,
-          publishedAt: item.pubDate ? new Date(item.pubDate) : new Date(),
-          source: NEWS_FEEDS[feedIndex].name,
-          category: NEWS_FEEDS[feedIndex].category
-        });
-      }
-    }
-  }
-
-  const seen = new Set();
-  const unique = allItems.filter(item => {
-    if (seen.has(item.url)) return false;
-    seen.add(item.url);
-    return true;
-  });
-
-  unique.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
-
-  newsCache = { data: unique.slice(0, MAX_CACHE_SIZE), fetchedAt: Date.now() };
+  isSyncRunning = true;
+  const startTime = Date.now();
 
   try {
-    for (const article of newsCache.data) {
-      await News.findOneAndUpdate(
-        { url: article.url },
-        {
-          title: article.title,
-          description: article.description,
-          publishedAt: article.publishedAt,
-          source: article.source,
-          category: article.category,
-          fetchedAt: new Date()
-        },
-        { upsert: true, new: true }
+    const parser = new Parser({
+      timeout: 10000,
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+
+    const allItems = [];
+    let processedFeeds = 0;
+
+    for (let i = 0; i < NEWS_FEEDS.length; i += BATCH_SIZE) {
+      const batch = NEWS_FEEDS.slice(i, i + BATCH_SIZE);
+      const results = await Promise.allSettled(
+        batch.map(feed => parser.parseURL(feed.url))
       );
+
+      for (let j = 0; j < results.length; j++) {
+        const feedIndex = i + j;
+        if (results[j].status === 'rejected') {
+          console.error(`Failed to fetch feed: ${NEWS_FEEDS[feedIndex].name}`, results[j].reason?.message);
+          continue;
+        }
+        processedFeeds++;
+
+        for (const item of (results[j].value.items || []).slice(0, MAX_PER_FEED)) {
+          const title = (item.title || '').trim();
+          const url = item.link || '';
+          if (!title || !url) continue;
+
+          allItems.push({
+            title,
+            description: extractDescription(item),
+            url,
+            publishedAt: item.pubDate ? new Date(item.pubDate) : new Date(),
+            source: NEWS_FEEDS[feedIndex].name,
+            category: NEWS_FEEDS[feedIndex].category
+          });
+        }
+      }
     }
-  } catch (err) {
-    console.error('Failed to persist news to MongoDB:', err.message);
+
+    const seen = new Set();
+    const uniqueItems = allItems.filter(item => {
+      const key = getDedupKey(item);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    let inserted = 0, updated = 0, matched = 0;
+    if (uniqueItems.length > 0) {
+      const bulkOps = uniqueItems.map(article => ({
+        updateOne: {
+          filter: { url: article.url },
+          update: {
+            $set: {
+              title: article.title,
+              description: article.description,
+              publishedAt: article.publishedAt,
+              source: article.source,
+              category: article.category,
+              fetchedAt: new Date()
+            }
+          },
+          upsert: true
+        }
+      }));
+
+      const bulkResult = await News.bulkWrite(bulkOps, { ordered: false });
+      matched = bulkResult.matchedCount;
+      inserted = bulkResult.upsertedCount;
+      updated = bulkResult.modifiedCount;
+    }
+
+    const cutoffDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const deleteResult = await News.deleteMany({ publishedAt: { $lt: cutoffDate } });
+
+    const executionTime = Date.now() - startTime;
+
+    const stats = {
+      feedsProcessed: processedFeeds,
+      totalFeeds: NEWS_FEEDS.length,
+      totalParsed: allItems.length,
+      uniqueArticles: uniqueItems.length,
+      inserted,
+      updated,
+      unchanged: Math.max(0, matched - updated),
+      deleted: deleteResult.deletedCount,
+      executionTime: `${executionTime}ms`
+    };
+
+    console.log(`RSS sync complete: ${JSON.stringify(stats)}`);
+    return stats;
+  } finally {
+    isSyncRunning = false;
   }
+}
 
-  return newsCache.data;
-};
+async function getRelatedArticles(articleUrl, limit = 5) {
+  const allNews = await News.find().sort({ publishedAt: -1 }).limit(100).lean();
 
-const getCacheStatus = () => {
-  const remaining = newsCache.fetchedAt ? Math.max(0, CACHE_DURATION - (Date.now() - newsCache.fetchedAt)) : 0;
-  return {
-    isCached: !!(newsCache.fetchedAt && remaining > 0),
-    totalArticles: newsCache.data.length,
-    nextRefreshIn: `${Math.ceil(remaining / 1000 / 60)}m`
-  };
-};
-
-const resetCache = () => { newsCache.fetchedAt = null; };
-
-const getNewsByPage = (page = 1, limit = 10) => {
-  const allNews = newsCache.data;
-  const startIndex = (page - 1) * limit;
-  return {
-    articles: allNews.slice(startIndex, startIndex + limit),
-    page,
-    limit,
-    totalArticles: allNews.length,
-    hasMore: startIndex + limit < allNews.length,
-    nextPage: startIndex + limit < allNews.length ? page + 1 : null
-  };
-};
-
-const getRelatedArticles = (articleUrl, limit = 5) => {
-  const allNews = newsCache.data;
   const ref = allNews.find(a => a.url === articleUrl);
-  if (!ref) return allNews.slice(0, limit);
+  if (!ref) return allNews.slice(0, limit).map(a => ({ ...a, id: computeArticleId(a.url) }));
 
   const keywords = ref.title.split(/\s+/).filter(w => w.length > 3).slice(0, 3);
   const scored = [];
@@ -130,15 +159,19 @@ const getRelatedArticles = (articleUrl, limit = 5) => {
   }
 
   scored.sort((a, b) => b.score - a.score);
-  const results = scored.slice(0, limit).map(s => s.article);
+  const results = scored.slice(0, limit).map(s => ({ ...s.article, id: computeArticleId(s.article.url) }));
 
   if (results.length < limit) {
     const used = new Set(results.map(a => a.url));
     used.add(articleUrl);
-    results.push(...allNews.filter(a => !used.has(a.url)).slice(0, limit - results.length));
+    const fillers = allNews
+      .filter(a => !used.has(a.url))
+      .slice(0, limit - results.length)
+      .map(a => ({ ...a, id: computeArticleId(a.url) }));
+    results.push(...fillers);
   }
 
   return results;
-};
+}
 
-module.exports = { fetchAllNews, getCacheStatus, getNewsByPage, getRelatedArticles, resetCache };
+module.exports = { fetchAndStoreNews, getRelatedArticles, computeArticleId };

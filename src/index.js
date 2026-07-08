@@ -1,6 +1,7 @@
 ﻿const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
+const cron = require("node-cron");
 const connectDB = require("./config/db");
 require("dotenv").config();
 
@@ -39,31 +40,17 @@ const PORT = process.env.PORT || 5100;
 connectDB().then(async () => {
   app.listen(PORT, () => console.log(`News server running on port ${PORT}`));
 
-  const { fetchAllNews, resetCache } = require("./utils/newsFetcher");
-  const newsCount = await require("./models/News").countDocuments();
-  if (newsCount === 0) {
-    console.log("No news in DB. Fetching from RSS feeds...");
-    fetchAllNews()
-      .then(() => console.log("Initial news fetch complete"))
-      .catch((err) => console.error("Initial news fetch error:", err.message));
-  } else {
-    console.log(`${newsCount} news articles found in DB. Loading into cache...`);
-    resetCache();
-    fetchAllNews()
-      .then(() => console.log("Cache loaded from DB"))
-      .catch((err) => console.error("Cache load error:", err.message));
-  }
-});
+  const { fetchAndStoreNews } = require("./utils/newsFetcher");
 
-const cron = require("node-cron");
-cron.schedule("*/30 * * * *", async () => {
-  console.log("Scheduled news refresh starting...");
-  try {
-    const { fetchAllNews, resetCache } = require("./utils/newsFetcher");
-    resetCache();
-    const articles = await fetchAllNews();
-    console.log(`News refresh complete: ${articles.length} articles`);
-  } catch (err) {
-    console.error("News refresh error:", err.message);
-  }
+  const timezone = "Asia/Kolkata";
+
+  cron.schedule("0 8-20 * * *", () => {
+    console.log("Scheduled RSS sync running...");
+    fetchAndStoreNews().catch(err => console.error("RSS sync error:", err.message));
+  }, { timezone });
+
+  console.log("Triggering initial background RSS sync...");
+  fetchAndStoreNews()
+    .then(stats => console.log(`Initial RSS sync complete: ${JSON.stringify(stats)}`))
+    .catch(err => console.error("Initial RSS sync error:", err.message));
 });

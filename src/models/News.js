@@ -12,5 +12,7 @@ const newsSchema = new mongoose.Schema({
 
 newsSchema.index({ category: 1 });
 newsSchema.index({ publishedAt: -1 });
+newsSchema.index({ category: 1, publishedAt: -1 });
+newsSchema.index({ source: 1 });
 
 module.exports = mongoose.model('News', newsSchema);
