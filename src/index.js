@@ -4,6 +4,7 @@ const morgan = require("morgan");
 const cron = require("node-cron");
 const connectDB = require("./config/db");
 require("dotenv").config();
+const { sendNewsNotification } = require("./utils/notificationSender");
 
 process.on("unhandledRejection", (err) => {
   console.error("Unhandled rejection:", err.message);
@@ -32,6 +33,18 @@ app.get("/api/health", (req, res) =>
   res.json({ status: "ok", time: new Date() }),
 );
 
+app.post("/api/notifications/send-news-notification-internal", async (req, res, next) => {
+  try {
+    if (req.headers["x-admin-secret"] !== process.env.ADMIN_SECRET) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+    const result = await sendNewsNotification();
+    res.json({ success: true, message: "Notification sent", data: result });
+  } catch (err) {
+    next(err);
+  }
+});
+
 app.use((err, req, res, next) => {
   console.error(err.message);
   res
@@ -54,6 +67,17 @@ connectDB().then(async () => {
       console.log("Scheduled RSS sync running...");
       fetchAndStoreNews().catch((err) =>
         console.error("RSS sync error:", err.message),
+      );
+    },
+    { timezone },
+  );
+
+  cron.schedule(
+    "0 8,13,19 * * *",
+    () => {
+      console.log("Scheduled notification sending...");
+      sendNewsNotification().catch((err) =>
+        console.error("Notification cron error:", err.message),
       );
     },
     { timezone },
