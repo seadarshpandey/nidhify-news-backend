@@ -1,14 +1,62 @@
-﻿const Parser = require('rss-parser');
-const News = require('../models/News');
+﻿const Parser = require("rss-parser");
+const News = require("../models/News");
 
 const NEWS_FEEDS = [
-  { name: 'ET Mutual Funds', url: 'https://economictimes.indiatimes.com/mf/rss.cms', category: 'Mutual Funds' },
-  { name: 'Moneycontrol Markets', url: 'https://www.moneycontrol.com/rss/marketreports.xml', category: 'Markets' },
-  { name: 'LiveMint Money', url: 'https://www.livemint.com/rss/money', category: 'Personal Finance' },
-  { name: 'ET Now Business', url: 'https://www.etnownews.com/feeds/gns-etn-markets.xml', category: 'Business' },
-  { name: 'Business Standard Finance', url: 'https://www.business-standard.com/rss/finance-103.rss', category: 'Finance' },
-  { name: 'Business Standard Personal Finance', url: 'https://www.business-standard.com/rss/finance/personal-finance-10313.rss', category: 'Personal Finance' },
-  { name: 'Business Standard Finance News', url: 'https://www.business-standard.com/rss/finance/news-10301.rss', category: 'Finance' }
+  {
+    name: "ET Mutual Funds",
+    url: "https://economictimes.indiatimes.com/mf/rssfeeds/359241701.cms",
+    category: "Mutual Funds",
+  },
+  {
+    name: "Livemint",
+    url: "https://www.livemint.com/rss/markets",
+    category: "Markets",
+  },
+  {
+    name: "Moneycontrol Markets",
+    url: "https://economictimes.indiatimes.com/wealth/rssfeeds/837555174.cms",
+    category: "Wealth",
+  },
+  {
+    name: "LiveMint Money",
+    url: "https://www.livemint.com/rss/money",
+    category: "Personal Finance",
+  },
+  {
+    name: "LiveMint Money",
+    url: "https://www.livemint.com/rss/budget",
+    category: "Personal Finance",
+  },
+  {
+    name: "ET Now Business",
+    url: "https://www.etnownews.com/feeds/gns-etn-markets.xml",
+    category: "Business",
+  },
+  {
+    name: "ET Now Markets",
+    url: "https://www.etnownews.com/feeds/gns-etn-markets.xml",
+    category: "Markets",
+  },
+  {
+    name: "ET Now Personal Finance",
+    url: "https://www.etnownews.com/feeds/gns-etn-personal-finance.xml",
+    category: "Personal Finance",
+  },
+  {
+    name: "ET Now Mutual Funds",
+    url: "https://www.etnownews.com/feeds/gns-etn-mutual-funds.xml",
+    category: "Mutual Funds",
+  },
+  {
+    name: "ET Now Income Tax",
+    url: "https://www.etnownews.com/feeds/gns-etn-income-tax.xml",
+    category: "Finance",
+  },
+  {
+    name: "ET Now Budget",
+    url: "https://www.etnownews.com/feeds/gns-etn-budget.xml",
+    category: "Budget",
+  },
 ];
 
 const MAX_PER_FEED = 5;
@@ -17,25 +65,25 @@ const BATCH_SIZE = 3;
 let isSyncRunning = false;
 
 function computeArticleId(url) {
-  return Buffer.from(url).toString('base64').slice(0, 16);
+  return Buffer.from(url).toString("base64").slice(0, 16);
 }
 
 function extractDescription(item) {
-  const raw = item.contentSnippet || item.content || item.summary || '';
+  const raw = item.contentSnippet || item.content || item.summary || "";
   return raw.trim().slice(0, 200);
 }
 
 function getDedupKey(item) {
   const normalizedTitle = item.title.toLowerCase().trim();
   const dateStr = item.publishedAt
-    ? new Date(item.publishedAt).toISOString().split('T')[0]
-    : '';
+    ? new Date(item.publishedAt).toISOString().split("T")[0]
+    : "";
   return `${normalizedTitle}_${dateStr}`;
 }
 
 async function fetchAndStoreNews() {
   if (isSyncRunning) {
-    console.log('RSS sync skipped because previous sync is still running.');
+    console.log("RSS sync skipped because previous sync is still running.");
     return null;
   }
 
@@ -45,7 +93,7 @@ async function fetchAndStoreNews() {
   try {
     const parser = new Parser({
       timeout: 10000,
-      headers: { 'User-Agent': 'Mozilla/5.0' }
+      headers: { "User-Agent": "Mozilla/5.0" },
     });
 
     const allItems = [];
@@ -54,20 +102,26 @@ async function fetchAndStoreNews() {
     for (let i = 0; i < NEWS_FEEDS.length; i += BATCH_SIZE) {
       const batch = NEWS_FEEDS.slice(i, i + BATCH_SIZE);
       const results = await Promise.allSettled(
-        batch.map(feed => parser.parseURL(feed.url))
+        batch.map((feed) => parser.parseURL(feed.url)),
       );
 
       for (let j = 0; j < results.length; j++) {
         const feedIndex = i + j;
-        if (results[j].status === 'rejected') {
-          console.error(`Failed to fetch feed: ${NEWS_FEEDS[feedIndex].name}`, results[j].reason?.message);
+        if (results[j].status === "rejected") {
+          console.error(
+            `Failed to fetch feed: ${NEWS_FEEDS[feedIndex].name}`,
+            results[j].reason?.message,
+          );
           continue;
         }
         processedFeeds++;
 
-        for (const item of (results[j].value.items || []).slice(0, MAX_PER_FEED)) {
-          const title = (item.title || '').trim();
-          const url = item.link || '';
+        for (const item of (results[j].value.items || []).slice(
+          0,
+          MAX_PER_FEED,
+        )) {
+          const title = (item.title || "").trim();
+          const url = item.link || "";
           if (!title || !url) continue;
 
           allItems.push({
@@ -76,23 +130,25 @@ async function fetchAndStoreNews() {
             url,
             publishedAt: item.pubDate ? new Date(item.pubDate) : new Date(),
             source: NEWS_FEEDS[feedIndex].name,
-            category: NEWS_FEEDS[feedIndex].category
+            category: NEWS_FEEDS[feedIndex].category,
           });
         }
       }
     }
 
     const seen = new Set();
-    const uniqueItems = allItems.filter(item => {
+    const uniqueItems = allItems.filter((item) => {
       const key = getDedupKey(item);
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
 
-    let inserted = 0, updated = 0, matched = 0;
+    let inserted = 0,
+      updated = 0,
+      matched = 0;
     if (uniqueItems.length > 0) {
-      const bulkOps = uniqueItems.map(article => ({
+      const bulkOps = uniqueItems.map((article) => ({
         updateOne: {
           filter: { url: article.url },
           update: {
@@ -102,11 +158,11 @@ async function fetchAndStoreNews() {
               publishedAt: article.publishedAt,
               source: article.source,
               category: article.category,
-              fetchedAt: new Date()
-            }
+              fetchedAt: new Date(),
+            },
           },
-          upsert: true
-        }
+          upsert: true,
+        },
       }));
 
       const bulkResult = await News.bulkWrite(bulkOps, { ordered: false });
@@ -116,7 +172,9 @@ async function fetchAndStoreNews() {
     }
 
     const cutoffDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const deleteResult = await News.deleteMany({ publishedAt: { $lt: cutoffDate } });
+    const deleteResult = await News.deleteMany({
+      publishedAt: { $lt: cutoffDate },
+    });
 
     const executionTime = Date.now() - startTime;
 
@@ -129,7 +187,7 @@ async function fetchAndStoreNews() {
       updated,
       unchanged: Math.max(0, matched - updated),
       deleted: deleteResult.deletedCount,
-      executionTime: `${executionTime}ms`
+      executionTime: `${executionTime}ms`,
     };
 
     console.log(`RSS sync complete: ${JSON.stringify(stats)}`);
@@ -142,10 +200,16 @@ async function fetchAndStoreNews() {
 async function getRelatedArticles(articleUrl, limit = 5) {
   const allNews = await News.find().sort({ publishedAt: -1 }).limit(100).lean();
 
-  const ref = allNews.find(a => a.url === articleUrl);
-  if (!ref) return allNews.slice(0, limit).map(a => ({ ...a, id: computeArticleId(a.url) }));
+  const ref = allNews.find((a) => a.url === articleUrl);
+  if (!ref)
+    return allNews
+      .slice(0, limit)
+      .map((a) => ({ ...a, id: computeArticleId(a.url) }));
 
-  const keywords = ref.title.split(/\s+/).filter(w => w.length > 3).slice(0, 3);
+  const keywords = ref.title
+    .split(/\s+/)
+    .filter((w) => w.length > 3)
+    .slice(0, 3);
   const scored = [];
 
   for (const article of allNews) {
@@ -159,15 +223,17 @@ async function getRelatedArticles(articleUrl, limit = 5) {
   }
 
   scored.sort((a, b) => b.score - a.score);
-  const results = scored.slice(0, limit).map(s => ({ ...s.article, id: computeArticleId(s.article.url) }));
+  const results = scored
+    .slice(0, limit)
+    .map((s) => ({ ...s.article, id: computeArticleId(s.article.url) }));
 
   if (results.length < limit) {
-    const used = new Set(results.map(a => a.url));
+    const used = new Set(results.map((a) => a.url));
     used.add(articleUrl);
     const fillers = allNews
-      .filter(a => !used.has(a.url))
+      .filter((a) => !used.has(a.url))
       .slice(0, limit - results.length)
-      .map(a => ({ ...a, id: computeArticleId(a.url) }));
+      .map((a) => ({ ...a, id: computeArticleId(a.url) }));
     results.push(...fillers);
   }
 
