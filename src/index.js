@@ -12,7 +12,9 @@ process.on("unhandledRejection", (err) => {
 const app = express();
 
 const corsOptions = {
-  origin: [process.env.FRONTEND_URL].filter(Boolean),
+  origin: ["http://localhost:3000", process.env.FRONTEND_URL].filter(
+    Boolean,
+  ),
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
@@ -32,7 +34,9 @@ app.get("/api/health", (req, res) =>
 
 app.use((err, req, res, next) => {
   console.error(err.message);
-  res.status(err.status || 500).json({ success: false, message: err.message || "Server Error" });
+  res
+    .status(err.status || 500)
+    .json({ success: false, message: err.message || "Server Error" });
 });
 
 const PORT = process.env.PORT || 5100;
@@ -44,13 +48,21 @@ connectDB().then(async () => {
 
   const timezone = "Asia/Kolkata";
 
-  cron.schedule("0 8-20 * * *", () => {
-    console.log("Scheduled RSS sync running...");
-    fetchAndStoreNews().catch(err => console.error("RSS sync error:", err.message));
-  }, { timezone });
+  cron.schedule(
+    "0 8-20 * * *",
+    () => {
+      console.log("Scheduled RSS sync running...");
+      fetchAndStoreNews().catch((err) =>
+        console.error("RSS sync error:", err.message),
+      );
+    },
+    { timezone },
+  );
 
   console.log("Triggering initial background RSS sync...");
   fetchAndStoreNews()
-    .then(stats => console.log(`Initial RSS sync complete: ${JSON.stringify(stats)}`))
-    .catch(err => console.error("Initial RSS sync error:", err.message));
+    .then((stats) =>
+      console.log(`Initial RSS sync complete: ${JSON.stringify(stats)}`),
+    )
+    .catch((err) => console.error("Initial RSS sync error:", err.message));
 });
