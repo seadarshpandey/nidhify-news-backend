@@ -28,6 +28,8 @@ app.use(express.json({ limit: "10mb" }));
 app.use(morgan("dev"));
 
 app.use("/api/news", require("./routes/news.routes"));
+app.use("/api/app-version", require("./routes/appVersion.routes"));
+app.use("/api/admin-app-version", require("./routes/adminAppVersion.routes"));
 
 app.get("/api/health", (req, res) =>
   res.json({ status: "ok", time: new Date() }),
