@@ -1,5 +1,15 @@
 const AppVersion = require('../models/appVersion.model');
 
+const mapToResponse = (config) => ({
+  latestVersion: config.latestVersion,
+  minimumVersion: config.minimumVersion,
+  forceUpdate: config.forceUpdate,
+  showUpdate: config.showUpdate,
+  title: config.title,
+  message: config.message,
+  storeUrl: config.platform === 'android' ? config.playStoreUrl : config.appStoreUrl
+});
+
 const getAppVersion = async (req, res, next) => {
   try {
     const { platform } = req.body;
@@ -14,18 +24,7 @@ const getAppVersion = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'No configuration found for this platform' });
     }
 
-    res.json({
-      success: true,
-      data: {
-        latestVersion: config.latestVersion,
-        minimumVersion: config.minimumVersion,
-        forceUpdate: config.forceUpdate,
-        showUpdate: config.showUpdate,
-        title: config.title,
-        message: config.message,
-        storeUrl: platform === 'android' ? config.playStoreUrl : config.appStoreUrl
-      }
-    });
+    res.json({ success: true, data: mapToResponse(config) });
   } catch (err) {
     next(err);
   }
@@ -37,7 +36,7 @@ const upsertAppVersion = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
 
-    const { platform, latestVersion, minimumVersion } = req.body;
+    const { platform, latestVersion, minimumVersion, storeUrl } = req.body;
 
     if (!platform || !['android', 'ios'].includes(platform)) {
       return res.status(400).json({ success: false, message: 'Valid platform is required' });
@@ -51,16 +50,20 @@ const upsertAppVersion = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'minimumVersion is required' });
     }
 
+    const updateData = { ...req.body };
+    if (storeUrl) {
+      const urlField = platform === 'android' ? 'playStoreUrl' : 'appStoreUrl';
+      updateData[urlField] = storeUrl;
+    }
+    delete updateData.storeUrl;
+
     const config = await AppVersion.findOneAndUpdate(
       { platform },
-      { $set: req.body },
+      { $set: updateData },
       { upsert: true, returnDocument: 'after', runValidators: true }
     );
 
-    res.json({
-      success: true,
-      data: config
-    });
+    res.json({ success: true, data: mapToResponse(config) });
   } catch (err) {
     next(err);
   }
@@ -80,7 +83,7 @@ const adminGetAppVersion = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'No configuration found for this platform' });
     }
 
-    res.json({ success: true, data: config });
+    res.json({ success: true, data: mapToResponse(config) });
   } catch (err) {
     next(err);
   }
@@ -88,7 +91,7 @@ const adminGetAppVersion = async (req, res, next) => {
 
 const adminSaveAppVersion = async (req, res, next) => {
   try {
-    const { platform, latestVersion, minimumVersion } = req.body;
+    const { platform, latestVersion, minimumVersion, storeUrl } = req.body;
 
     if (!platform || !['android', 'ios'].includes(platform)) {
       return res.status(400).json({ success: false, message: 'Valid platform is required' });
@@ -102,13 +105,20 @@ const adminSaveAppVersion = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'minimumVersion is required' });
     }
 
+    const updateData = { ...req.body };
+    if (storeUrl) {
+      const urlField = platform === 'android' ? 'playStoreUrl' : 'appStoreUrl';
+      updateData[urlField] = storeUrl;
+    }
+    delete updateData.storeUrl;
+
     const config = await AppVersion.findOneAndUpdate(
       { platform },
-      { $set: req.body },
+      { $set: updateData },
       { upsert: true, returnDocument: 'after', runValidators: true }
     );
 
-    res.json({ success: true, data: config });
+    res.json({ success: true, data: mapToResponse(config) });
   } catch (err) {
     next(err);
   }
