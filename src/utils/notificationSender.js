@@ -11,7 +11,7 @@ async function sendNewsNotification() {
     const payload = {
       title: latest.title.slice(0, 60),
       message: (latest.description || latest.title).slice(0, 90),
-      url: "https://wealth.nidhify.com/ReadNews",
+      url: "https://app.nidhify.com/ReadNews",
       sendToAll: true,
     };
 
