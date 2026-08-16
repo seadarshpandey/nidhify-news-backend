@@ -30,6 +30,7 @@ app.use(morgan("dev"));
 app.use("/api/news", require("./routes/news.routes"));
 app.use("/api/app-version", require("./routes/appVersion.routes"));
 app.use("/api/admin-app-version", require("./routes/adminAppVersion.routes"));
+app.use("/api/fund-analysis", require("./routes/fundAnalysis.routes"));
 
 app.get("/api/health", (req, res) =>
   res.json({ status: "ok", time: new Date() }),
@@ -49,9 +50,11 @@ app.post("/api/notifications/send-news-notification-internal", async (req, res, 
 
 app.use((err, req, res, next) => {
   console.error(err.message);
-  res
-    .status(err.status || 500)
-    .json({ success: false, message: err.message || "Server Error" });
+  const body = { success: false, message: err.message || "Server Error" };
+  if (err.status === 429) {
+    body.waitSeconds = err.waitSeconds || 15;
+  }
+  res.status(err.status || 500).json(body);
 });
 
 const PORT = process.env.PORT || 5100;
