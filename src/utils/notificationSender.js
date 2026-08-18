@@ -25,6 +25,7 @@ async function sendNewsNotification() {
         "x-admin-secret": process.env.ADMIN_SECRET,
       },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(15000),
     });
 
     if (!res.ok) {
@@ -36,6 +37,8 @@ async function sendNewsNotification() {
     return data;
   } catch (err) {
     console.error("Notification send error:", err.message);
+    if (err.cause) console.error("  cause:", err.cause.code, err.cause.message);
+    console.error(err.stack);
     throw err;
   }
 }

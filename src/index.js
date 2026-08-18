@@ -81,9 +81,10 @@ connectDB().then(async () => {
     "0 8,19 * * *",
     () => {
       console.log("Scheduled notification sending...");
-      sendNewsNotification().catch((err) =>
-        console.error("Notification cron error:", err.message),
-      );
+      sendNewsNotification().catch((err) => {
+        console.error("Notification cron error:", err.message);
+        if (err.cause) console.error("  cause:", err.cause.code, err.cause.message);
+      });
     },
     { timezone },
   );
