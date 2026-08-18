@@ -28,6 +28,7 @@ app.use(express.json({ limit: "10mb" }));
 app.use(morgan("dev"));
 
 app.use("/api/news", require("./routes/news.routes"));
+app.use("/api/latest", require("./routes/latest.routes"));
 app.use("/api/app-version", require("./routes/appVersion.routes"));
 app.use("/api/admin-app-version", require("./routes/adminAppVersion.routes"));
 app.use("/api/fund-analysis", require("./routes/fundAnalysis.routes"));
@@ -78,17 +79,18 @@ connectDB().then(async () => {
     { timezone },
   );
 
-  cron.schedule(
-    "0 8,19 * * *",
-    () => {
-      console.log("Scheduled notification sending...");
-      sendNewsNotification().catch((err) => {
-        console.error("Notification cron error:", err.message);
-        if (err.cause) console.error("  cause:", err.cause.code, err.cause.message);
-      });
-    },
-    { timezone },
-  );
+  // Notification sending moved to wealth-analysis-backend cron
+  // cron.schedule(
+  //   "0 8,19 * * *",
+  //   () => {
+  //     console.log("Scheduled notification sending...");
+  //     sendNewsNotification().catch((err) => {
+  //       console.error("Notification cron error:", err.message);
+  //       if (err.cause) console.error("  cause:", err.cause.code, err.cause.message);
+  //     });
+  //   },
+  //   { timezone },
+  // );
 
   console.log("Triggering initial background RSS sync...");
   fetchAndStoreNews()

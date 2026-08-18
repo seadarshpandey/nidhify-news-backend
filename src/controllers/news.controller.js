@@ -130,4 +130,29 @@ const getRelated = async (req, res, next) => {
   }
 };
 
-module.exports = { getNews, refreshNews, getNewsPaginated, getRelated };
+const getLatestNews = async (req, res, next) => {
+  try {
+    if (req.headers['x-admin-secret'] !== process.env.ADMIN_SECRET) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const latest = await News.findOne().sort({ publishedAt: -1 }).lean();
+    if (!latest) {
+      return res.json({ success: true, data: null });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        title: latest.title.slice(0, 60),
+        message: (latest.description || latest.title).slice(0, 90),
+        url: 'https://app.nidhify.com/ReadNews',
+        sendToAll: true
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { getNews, refreshNews, getNewsPaginated, getRelated, getLatestNews };
