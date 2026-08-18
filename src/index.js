@@ -51,6 +51,7 @@ app.post("/api/notifications/send-news-notification-internal", async (req, res, 
 app.use((err, req, res, next) => {
   console.error(err.message);
   const body = { success: false, message: err.message || "Server Error" };
+  if (err.cause?.code) body.cause = err.cause.code;
   if (err.status === 429) {
     body.waitSeconds = err.waitSeconds || 15;
   }
