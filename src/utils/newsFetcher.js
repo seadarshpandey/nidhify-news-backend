@@ -1,4 +1,5 @@
-﻿const Parser = require("rss-parser");
+﻿const crypto = require("crypto");
+const Parser = require("rss-parser");
 const News = require("../models/News");
 
 const NEWS_FEEDS = [
@@ -28,11 +29,6 @@ const NEWS_FEEDS = [
     category: "Personal Finance",
   },
   {
-    name: "ET Now Business",
-    url: "https://www.etnownews.com/feeds/gns-etn-markets.xml",
-    category: "Business",
-  },
-  {
     name: "ET Now Markets",
     url: "https://www.etnownews.com/feeds/gns-etn-markets.xml",
     category: "Markets",
@@ -57,6 +53,11 @@ const NEWS_FEEDS = [
     url: "https://www.etnownews.com/feeds/gns-etn-budget.xml",
     category: "Budget",
   },
+  {
+    name: "LiveMint",
+    url: "https://www.livemint.com/rss/budget",
+    category: "Budget",
+  },
 ];
 
 const MAX_PER_FEED = 5;
@@ -65,12 +66,49 @@ const BATCH_SIZE = 3;
 let isSyncRunning = false;
 
 function computeArticleId(url) {
-  return Buffer.from(url).toString("base64").slice(0, 16);
+  return crypto.createHash("sha1").update(String(url)).digest("hex").slice(0, 20);
 }
 
 function extractDescription(item) {
   const raw = item.contentSnippet || item.content || item.summary || "";
-  return raw.trim().slice(0, 200);
+  const text = String(raw)
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!text) return null;
+  if (text.length <= 400) return text;
+
+  const cut = text.slice(0, 400);
+  const lastSpace = cut.lastIndexOf(" ");
+  return `${cut.slice(0, lastSpace > 0 ? lastSpace : 400)}…`;
+}
+
+function extractImageUrl(item) {
+  const collectMediaUrls = (media) => {
+    if (!media) return [];
+    const list = Array.isArray(media) ? media : [media];
+    return list
+      .map((m) => m && m.$ && m.$.url)
+      .filter((u) => typeof u === "string" && /^https?:\/\//i.test(u));
+  };
+
+  const fromHtml = (html) => {
+    if (typeof html !== "string") return null;
+    const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+    return match && /^https?:\/\//i.test(match[1]) ? match[1] : null;
+  };
+
+  const candidates = [
+    item.enclosure?.url,
+    ...collectMediaUrls(item.mediaContent || item["media:content"]),
+    ...collectMediaUrls(item.mediaThumbnail || item["media:thumbnail"]),
+    fromHtml(item["content:encoded"]) || fromHtml(item.content),
+  ];
+
+  return (
+    candidates.find((u) => typeof u === "string" && /^https?:\/\//i.test(u)) ||
+    null
+  );
 }
 
 function getDedupKey(item) {
@@ -94,6 +132,12 @@ async function fetchAndStoreNews() {
     const parser = new Parser({
       timeout: 10000,
       headers: { "User-Agent": "Mozilla/5.0" },
+      customFields: {
+        item: [
+          ["media:content", "mediaContent", { keepArray: true }],
+          ["media:thumbnail", "mediaThumbnail", { keepArray: true }],
+        ],
+      },
     });
 
     const allItems = [];
@@ -128,6 +172,7 @@ async function fetchAndStoreNews() {
             title,
             description: extractDescription(item),
             url,
+            imageUrl: extractImageUrl(item),
             publishedAt: item.pubDate ? new Date(item.pubDate) : new Date(),
             source: NEWS_FEEDS[feedIndex].name,
             category: NEWS_FEEDS[feedIndex].category,
@@ -158,6 +203,7 @@ async function fetchAndStoreNews() {
               publishedAt: article.publishedAt,
               source: article.source,
               category: article.category,
+              imageUrl: article.imageUrl,
               fetchedAt: new Date(),
             },
           },

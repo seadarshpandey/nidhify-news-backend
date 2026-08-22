@@ -92,10 +92,10 @@ connectDB().then(async () => {
   //   { timezone },
   // );
 
-  console.log("Triggering initial background RSS sync...");
-  fetchAndStoreNews()
-    .then((stats) =>
-      console.log(`Initial RSS sync complete: ${JSON.stringify(stats)}`),
-    )
-    .catch((err) => console.error("Initial RSS sync error:", err.message));
+  // console.log("Triggering initial background RSS sync...");
+  // fetchAndStoreNews()
+  //   .then((stats) =>
+  //     console.log(`Initial RSS sync complete: ${JSON.stringify(stats)}`),
+  //   )
+  //   .catch((err) => console.error("Initial RSS sync error:", err.message));
 });

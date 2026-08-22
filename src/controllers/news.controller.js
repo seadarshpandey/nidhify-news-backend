@@ -10,12 +10,14 @@ const toArticleResponse = (doc) => ({
   url: doc.url,
   publishedAt: doc.publishedAt,
   source: doc.source,
-  category: doc.category
+  category: doc.category,
+  imageUrl: doc.imageUrl || null
 });
 
 const getNews = async (req, res, next) => {
   try {
     const { category, source, limit, page } = req.query;
+    console.log('Query Parameters:', { category, source, limit, page });
 
     const pageNum = Math.max(1, parseInt(page) || 1);
     const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 20));
