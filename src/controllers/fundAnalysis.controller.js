@@ -158,8 +158,10 @@ Required structure:
     "positive": ["short points"],
     "negative": ["short points"]
   },
-  "report": "Concise narrative in ${language}. Use \\\\n for paragraph breaks and ### for headings. Cover portfolio summary, every fund, diversification, market context, considerations and alerts. No buy/sell directives."
+  "report": "Brief overview in ${language}, maximum 120 words. Summarize the portfolio overall; do NOT repeat per-fund details already in funds[]. Use \\\\n for paragraph breaks and ### for headings. No buy/sell directives."
 }
+
+funds[] must contain exactly one entry per input holding with matching idx, in the same order as the input. Never omit holdings.
 
 Field mapping for input:
 idx = position of this holding in the holdings array (copy it back exactly in funds[].idx, do not recompute or reorder)
@@ -285,8 +287,18 @@ const analyzePortfolio = async (req, res, next) => {
     const messages = buildAnalysisPrompt(modelHoldings, aggregates, lang);
 
     const { result: analysis, model } = await callGroqWithFallback(messages, {
-      maxTokens: 2500,
+      maxTokens: Math.min(8000, 1500 + holdings.length * 600),
     });
+
+    const returnedFundCount = Array.isArray(analysis.funds)
+      ? analysis.funds.length
+      : 0;
+
+    if (returnedFundCount < holdings.length) {
+      console.warn(
+        `[fundAnalysis] model returned ${returnedFundCount}/${holdings.length} funds`,
+      );
+    }
 
     const result = {
       ...analysis,
