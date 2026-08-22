@@ -10,7 +10,6 @@ const compactHoldings = (holdings, totalInvested) =>
     return {
       idx,
       n: holding.schemeName,
-      r: holding.rating,
       i: invested,
       v: Number(holding.currVal) || 0,
       ar: Number(holding.AbsReturn) || 0,
@@ -138,13 +137,10 @@ Required structure:
     {
       "idx": 0,
       "category": "Liquid | Mid Cap | Small Cap | Flexi Cap | Large Cap / Index | other",
-      "riskLevel": "Low | Moderate | High | Very High",
-      "ratingMeaning": "one short line",
-      "navAnalysis": "one short line; do not invent NAV data",
+      "riskLevel": "Low | Moderate | High | Very High | Unknown",
       "performanceAnalysis": "2 short sentences",
       "strengths": ["2 short points"],
       "weaknesses": ["2 short points"],
-      "keyFactors": ["2 short points"],
       "assessment": "objective short assessment",
       "suitability": "who this type of fund may suit, without recommendation",
       "whatToWatch": "short risks or factors to monitor"
@@ -162,19 +158,19 @@ Required structure:
     "positive": ["short points"],
     "negative": ["short points"]
   },
-  "riskProfile": "one concise paragraph",
-  "report": "Concise narrative in ${language}. Use \\\\n for paragraph breaks and ### for headings. Cover portfolio summary, every fund, diversification, market context, considerations and alerts. No buy/sell directives.",
-  "disclaimer": "AI-generated educational information, not investment advice; consult a SEBI-registered advisor."
+  "report": "Concise narrative in ${language}. Use \\\\n for paragraph breaks and ### for headings. Cover portfolio summary, every fund, diversification, market context, considerations and alerts. No buy/sell directives."
 }
 
 Field mapping for input:
 idx = position of this holding in the holdings array (copy it back exactly in funds[].idx, do not recompute or reorder)
 n = scheme name
-r = rating
 i = invested value
 v = current value
 ar = absolute return percentage
-w = portfolio weight percentage.`;
+w = portfolio weight percentage.
+
+riskLevel: Use the risk level only if it is explicitly supplied in the input data. Otherwise return "Unknown". Never infer or guess a fund's official risk level from its name or category.`;
+
 
   const userContent = `Portfolio:
 ${JSON.stringify({
@@ -258,12 +254,9 @@ const attachFundData = (holdings, aggregates, funds = []) =>
         : 0,
       category: f.category,
       riskLevel: f.riskLevel,
-      ratingMeaning: f.ratingMeaning,
-      navAnalysis: f.navAnalysis,
       performanceAnalysis: f.performanceAnalysis,
       strengths: f.strengths,
       weaknesses: f.weaknesses,
-      keyFactors: f.keyFactors,
       assessment: f.assessment,
       suitability: f.suitability,
       whatToWatch: f.whatToWatch,
