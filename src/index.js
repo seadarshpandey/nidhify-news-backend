@@ -13,9 +13,7 @@ process.on("unhandledRejection", (err) => {
 const app = express();
 
 const corsOptions = {
-  origin: ["http://localhost:3000", process.env.FRONTEND_URL].filter(
-    Boolean,
-  ),
+  origin: ["http://localhost:3000", process.env.FRONTEND_URL].filter(Boolean),
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
@@ -37,17 +35,22 @@ app.get("/api/health", (req, res) =>
   res.json({ status: "ok", time: new Date() }),
 );
 
-app.post("/api/notifications/send-news-notification-internal", async (req, res, next) => {
-  try {
-    if (req.headers["x-admin-secret"] !== process.env.ADMIN_SECRET) {
-      return res.status(401).json({ success: false, message: "Unauthorized" });
+app.post(
+  "/api/notifications/send-news-notification-internal",
+  async (req, res, next) => {
+    try {
+      if (req.headers["x-admin-secret"] !== process.env.ADMIN_SECRET) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Unauthorized" });
+      }
+      const result = await sendNewsNotification();
+      res.json({ success: true, message: "Notification sent", data: result });
+    } catch (err) {
+      next(err);
     }
-    const result = await sendNewsNotification();
-    res.json({ success: true, message: "Notification sent", data: result });
-  } catch (err) {
-    next(err);
-  }
-});
+  },
+);
 
 app.use((err, req, res, next) => {
   console.error(err.message);
@@ -69,7 +72,8 @@ connectDB().then(async () => {
   const timezone = "Asia/Kolkata";
 
   cron.schedule(
-    "0 8-20 * * *",
+    // "0 8-20 * * *", //every hour from 8am to 8pm
+       "0 6-21/4 * * *",  //evry 4 hours from 8am to 8pm
     () => {
       console.log("Scheduled RSS sync running...");
       fetchAndStoreNews().catch((err) =>
