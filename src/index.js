@@ -97,9 +97,9 @@ connectDB().then(async () => {
   // );
 
   // console.log("Triggering initial background RSS sync...");
-  // fetchAndStoreNews()
-  //   .then((stats) =>
-  //     console.log(`Initial RSS sync complete: ${JSON.stringify(stats)}`),
-  //   )
-  //   .catch((err) => console.error("Initial RSS sync error:", err.message));
+  fetchAndStoreNews()
+    .then((stats) =>
+      console.log(`Initial RSS sync complete: ${JSON.stringify(stats)}`),
+    )
+    .catch((err) => console.error("Initial RSS sync error:", err.message));
 });

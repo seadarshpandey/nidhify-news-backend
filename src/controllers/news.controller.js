@@ -149,6 +149,7 @@ const getLatestNews = async (req, res, next) => {
         title: latest.title.slice(0, 60),
         message: (latest.description || latest.title).slice(0, 90),
         url: 'https://app.nidhify.com/ReadNews',
+        imageUrl: latest.imageUrl || null,
         sendToAll: true
       }
     });

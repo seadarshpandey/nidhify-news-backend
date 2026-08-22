@@ -83,6 +83,27 @@ function extractDescription(item) {
   return `${cut.slice(0, lastSpace > 0 ? lastSpace : 400)}…`;
 }
 
+function normalizeImageUrl(url) {
+  if (typeof url !== "string") return url;
+
+  if (
+    /^https?:\/\/img\.etimg\.com\/photo\//i.test(url) &&
+    /\.cms(\?.*)?$/i.test(url)
+  ) {
+    return url
+      .replace("/photo/", "/thumb/")
+      .replace(/\.cms(\?.*)?$/i, ",width-600,height-338.cms$1");
+  }
+
+  if (/^https?:\/\/images\.etnownews\.com\/thumb\//i.test(url)) {
+    return url
+      .replace(/width-\d+/i, "width-600")
+      .replace(/height-\d+/i, "height-338");
+  }
+
+  return url;
+}
+
 function extractImageUrl(item) {
   const collectMediaUrls = (media) => {
     if (!media) return [];
@@ -105,10 +126,11 @@ function extractImageUrl(item) {
     fromHtml(item["content:encoded"]) || fromHtml(item.content),
   ];
 
-  return (
-    candidates.find((u) => typeof u === "string" && /^https?:\/\//i.test(u)) ||
-    null
+  const firstImage = candidates.find(
+    (u) => typeof u === "string" && /^https?:\/\//i.test(u),
   );
+
+  return firstImage ? normalizeImageUrl(firstImage) : null;
 }
 
 function getDedupKey(item) {
